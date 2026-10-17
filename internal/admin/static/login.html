@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>登录 · log-trace-mcp</title>
+  <style>
+    :root { --bg:#0f1720; --panel:#16202b; --line:#2a3846; --fg:#e6edf3; --mut:#8aa0b4; --accent:#3fb6a8; --err:#e06c75; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--fg);
+           font:14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+    form { width:min(360px, 90vw); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:24px; }
+    h1 { font-size:16px; margin:0 0 4px; }
+    p { color:var(--mut); font-size:12px; margin:0 0 16px; }
+    label { display:block; color:var(--mut); font-size:12px; margin-bottom:6px; }
+    input { width:100%; padding:10px; background:#0d151d; color:var(--fg); border:1px solid var(--line); border-radius:6px; font-family:inherit; }
+    button { margin-top:14px; width:100%; padding:10px; background:var(--accent); color:#06231f; border:0; border-radius:6px; font-weight:600; cursor:pointer; }
+    .err { color:var(--err); font-size:13px; min-height:18px; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <form id="login">
+    <h1>log-trace-mcp</h1>
+    <p>输入 Admin Token 进入配置页</p>
+    <label for="token">Admin Token</label>
+    <input id="token" type="password" autofocus autocomplete="current-password" placeholder="LOG_TRACE_ADMIN_TOKEN" />
+    <button type="submit">登录</button>
+    <div class="err" id="err"></div>
+  </form>
+  <script>
+    const err = document.getElementById('err');
+    document.getElementById('login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: document.getElementById('token').value }),
+        });
+        if (res.ok) { location.href = '/'; return; }
+        const data = await res.json().catch(() => ({}));
+        err.textContent = data.error || '登录失败';
+      } catch (_) {
+        err.textContent = '网络错误';
+      }
+    });
+  </script>
+</body>
+</html>

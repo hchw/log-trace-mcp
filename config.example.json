@@ -1,0 +1,9 @@
+{
+  "_comment": "log-trace-mcp 进程配置。复制为 config.json（或设 LOG_TRACE_CONFIG 指向它）。环境变量优先级高于本文件。",
+  "config_version": 1,
+  "master_key": "<MASTER_KEY>",
+  "admin_token": "change-me",
+  "db_path": "log-trace-mcp.db",
+  "admin_addr": "127.0.0.1:8710",
+  "mcp_http_addr": "127.0.0.1:8711"
+}

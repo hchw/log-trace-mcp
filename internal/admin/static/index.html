@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>log-trace-mcp 配置</title>
+  <style>
+    :root { --bg:#0f1720; --panel:#16202b; --line:#2a3846; --fg:#e6edf3; --mut:#8aa0b4; --accent:#3fb6a8; --err:#e06c75; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+    header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:16px; }
+    h1 { font-size:16px; margin:0; }
+    header .spacer { flex:1; }
+    main { max-width:960px; margin:0 auto; padding:20px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
+    h2 { font-size:15px; margin:0 0 12px; }
+    label { display:block; color:var(--mut); font-size:12px; margin:8px 0 4px; }
+    input, select, textarea { width:100%; padding:8px; background:#0d151d; color:var(--fg); border:1px solid var(--line); border-radius:6px; font-family:inherit; }
+    textarea { min-height:72px; font-family:ui-monospace, monospace; }
+    button { padding:8px 14px; background:var(--accent); color:#06231f; border:0; border-radius:6px; font-weight:600; cursor:pointer; }
+    button.secondary { background:transparent; color:var(--fg); border:1px solid var(--line); }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); font-size:13px; }
+    .mut { color:var(--mut); }
+    .err { color:var(--err); }
+    .ok { color:var(--accent); }
+    .logbox { background:#0d151d; border:1px solid var(--line); border-radius:6px; padding:10px; max-height:220px; overflow:auto;
+              font-family:ui-monospace, monospace; font-size:12px; line-height:1.6; white-space:pre-wrap; }
+    .logbox .ts { color:var(--mut); }
+    .row { display:flex; gap:8px; }
+    .row > * { flex:1; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>log-trace-mcp 配置</h1>
+    <span class="mut" id="status"></span>
+    <span class="spacer"></span>
+    <button class="secondary" onclick="logout()">退出登录</button>
+  </header>
+  <main>
+    <div class="panel">
+      <h2>租户列表</h2>
+      <table>
+        <thead><tr><th>ID</th><th>名称</th><th>类型</th><th>启用</th><th>凭据</th><th></th></tr></thead>
+        <tbody id="tenants"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>新增 / 更新租户</h2>
+      <div class="row">
+        <div><label>ID</label><input id="f_id" placeholder="prod-sls" /></div>
+        <div><label>名称</label><input id="f_name" placeholder="生产 SLS" /></div>
+        <div>
+          <label>类型</label>
+          <select id="f_type" onchange="syncHint()">
+            <option value="sls">sls</option>
+            <option value="opensearch">opensearch</option>
+          </select>
+        </div>
+        <div><label>启用</label><select id="f_enabled"><option value="true">是</option><option value="false">否</option></select></div>
+      </div>
+      <label>Config (JSON)</label>
+      <textarea id="f_config"></textarea>
+      <div class="mut" id="cfg_hint"></div>
+      <label>凭据 (JSON，留空表示不修改)</label>
+      <textarea id="f_creds"></textarea>
+      <div class="mut" id="cred_hint"></div>
+      <div style="margin-top:12px"><button onclick="saveTenant()">保存</button></div>
+      <div class="err" id="form_err"></div>
+    </div>
+
+    <div class="panel">
+      <h2>已注册工具</h2>
+      <div id="tools" class="mut"></div>
+    </div>
+
+    <div class="panel">
+      <h2>运行日志</h2>
+      <div id="log" class="logbox mut">(暂无)</div>
+    </div>
+  </main>
+
+  <script>
+    const hints = {
+      sls: {
+        config: '{\n  "region": "cn-hangzhou",\n  "endpoint": "cn-hangzhou.log.aliyuncs.com"\n}',
+        creds: '{\n  "ak_id": "",\n  "ak_secret": ""\n}',
+        hint: 'region + endpoint；凭据为 ak_id / ak_secret（可加 security_token）。project 不在此配置，由调用时按 tool 参数传入。'
+      },
+      opensearch: {
+        config: '{\n  "endpoint": "http://localhost:9200",\n  "index": "app-logs",\n  "time_field": "@timestamp",\n  "auth_kind": "basic"\n}',
+        creds: '{\n  "username": "",\n  "password": ""\n}',
+        hint: 'auth_kind: none | basic | header（header 用 header_key + header_value）'
+      }
+    };
+
+    let editingId = '';
+    function flash(msg) { document.getElementById('status').textContent = msg; }
+
+    function logMsg(msg, cls) {
+      const box = document.getElementById('log');
+      if (box.textContent === '(暂无)') box.textContent = '';
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      const ts = new Date().toLocaleTimeString();
+      line.innerHTML = '<span class="ts">[' + ts + ']</span> ' + msg.replace(/</g, '&lt;');
+      box.prepend(line);
+    }
+
+    function syncHint() {
+      const t = document.getElementById('f_type').value;
+      document.getElementById('f_config').value = hints[t].config;
+      document.getElementById('f_creds').value = hints[t].creds;
+      document.getElementById('cfg_hint').textContent = hints[t].hint;
+      document.getElementById('cred_hint').textContent = '';
+    }
+
+    async function api(method, path, body) {
+      const res = await fetch(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (res.status === 401) { location.href = '/login'; throw new Error('未登录'); }
+      const text = await res.text();
+      let data = {}; try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { error: text }; }
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    async function load() {
+      try {
+        const tenants = await api('GET', '/api/tenants');
+        const tbody = document.getElementById('tenants');
+        tbody.innerHTML = '';
+        (tenants || []).forEach(e => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${e.id}</td><td>${e.name || ''}</td><td>${e.type}</td><td>${e.enabled ? '✓' : '—'}</td><td>${e.has_creds ? '****' : '(空)'}</td>
+            <td><button class="secondary" onclick="editTenant('${e.id}')">编辑</button>
+            <button class="secondary" onclick="testTenant('${e.id}', this)">测试</button>
+            <button class="secondary" onclick="delTenant('${e.id}')">删除</button></td>`;
+          tbody.appendChild(tr);
+        });
+        const tools = await api('GET', '/api/tools');
+        document.getElementById('tools').textContent = (tools.tools || []).join(', ') || '(无)';
+        flash('已加载');
+        logMsg('已加载 ' + (tenants || []).length + ' 个租户');
+      } catch (e) { flash('加载失败: ' + e.message); logMsg('加载失败: ' + e.message, 'err'); }
+    }
+
+    async function saveTenant() {
+      const err = document.getElementById('form_err');
+      err.textContent = '';
+      try {
+        const body = {
+          id: document.getElementById('f_id').value.trim(),
+          name: document.getElementById('f_name').value.trim(),
+          type: document.getElementById('f_type').value,
+          enabled: document.getElementById('f_enabled').value === 'true',
+          config: JSON.parse(document.getElementById('f_config').value || '{}'),
+        };
+        const credsText = document.getElementById('f_creds').value.trim();
+        if (credsText) body.creds = JSON.parse(credsText);
+        const existing = editingId;
+        if (existing) await api('PUT', '/api/tenants/' + existing, body);
+        else await api('POST', '/api/tenants', body);
+        editingId = '';
+        document.getElementById('f_id').disabled = false;
+        logMsg('已保存租户 ' + body.id, 'ok');
+        await load();
+      } catch (e) { err.textContent = e.message; }
+    }
+
+    async function editTenant(id) {
+      const tenants = await api('GET', '/api/tenants');
+      const e = tenants.find(x => x.id === id);
+      if (!e) return;
+      editingId = id;
+      document.getElementById('f_id').value = e.id;
+      document.getElementById('f_id').disabled = true;
+      document.getElementById('f_name').value = e.name || '';
+      document.getElementById('f_type').value = e.type;
+      document.getElementById('f_enabled').value = e.enabled ? 'true' : 'false';
+      document.getElementById('f_config').value = JSON.stringify(e.config || {}, null, 2);
+      document.getElementById('f_creds').value = '';
+      document.getElementById('cfg_hint').textContent = e.has_creds ? '凭据已存在，留空保持不变' : '';
+      flash('编辑 ' + id);
+    }
+
+    async function delTenant(id) {
+      if (!confirm('删除 ' + id + '?')) return;
+      await api('DELETE', '/api/tenants/' + id);
+      load();
+    }
+
+    async function testTenant(id, btn) {
+      if (btn) { btn.disabled = true; btn.textContent = '测试中…'; }
+      flash(id + ': 测试中…');
+      logMsg('测试 ' + id + ' …');
+      try {
+        const r = await api('POST', '/api/tenants/' + id + '/test');
+        if (r.ok) {
+          const sample = (r.sample && r.sample.length) ? '  样例: ' + r.sample.join(', ') : '';
+          const msg = '成功 · ' + r.sources + ' 个数据源 · ' + r.duration_ms + 'ms' + sample;
+          flash(id + ': 连接成功');
+          logMsg('测试 ' + id + ' → ' + msg, 'ok');
+        } else {
+          flash(id + ': 连接失败');
+          logMsg('测试 ' + id + ' → 失败: ' + r.error + ' (' + (r.duration_ms || '?') + 'ms)', 'err');
+        }
+      } catch (e) {
+        flash(id + ': 测试出错');
+        logMsg('测试 ' + id + ' → 出错: ' + e.message, 'err');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '测试'; }
+      }
+    }
+
+    async function logout() {
+      await api('POST', '/api/logout');
+      location.href = '/login';
+    }
+
+    syncHint();
+    load();
+  </script>
+</body>
+</html>

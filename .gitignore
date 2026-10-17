@@ -1,0 +1,14 @@
+# build artifacts
+/bin/
+/dist/
+
+# local databases
+*.db
+*.db-wal
+*.db-shm
+
+# local config / secrets
+config.json
+.env
+.pi
+openspec
