@@ -57,6 +57,7 @@
           <select id="f_type" onchange="syncHint()">
             <option value="sls">sls</option>
             <option value="opensearch">opensearch</option>
+            <option value="tls">tls</option>
           </select>
         </div>
         <div><label>启用</label><select id="f_enabled"><option value="true">是</option><option value="false">否</option></select></div>
@@ -93,6 +94,11 @@
         config: '{\n  "endpoint": "http://localhost:9200",\n  "index": "app-logs",\n  "time_field": "@timestamp",\n  "auth_kind": "basic"\n}',
         creds: '{\n  "username": "",\n  "password": ""\n}',
         hint: 'auth_kind: none | basic | header（header 用 header_key + header_value）'
+      },
+      tls: {
+        config: '{\n  "endpoint": "https://tls-cn-beijing.volces.com",\n  "region": "cn-beijing"\n}',
+        creds: '{\n  "ak_id": "",\n  "ak_secret": ""\n}',
+        hint: '火山引擎 TLS：endpoint 或 region 至少填一个；凭据为 ak_id / ak_secret（可加 security_token）。project 为日志项目，source 为日志主题，均在调用时传入。'
       }
     };
 

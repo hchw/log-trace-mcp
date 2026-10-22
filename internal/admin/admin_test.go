@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hchw/log-trace-mcp/internal/crypto"
@@ -45,6 +46,17 @@ func do(t *testing.T, h http.Handler, method, path, token string, body any) *htt
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
+}
+
+func TestAdminPageOffersTLSType(t *testing.T) {
+	srv, _ := newAdmin(t)
+	rec := do(t, srv.Handler(), "GET", "/", "secret-token", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `value="tls"`) {
+		t.Fatal("admin page should offer the tls tenant type")
+	}
 }
 
 func TestAdminRejectsMissingToken(t *testing.T) {

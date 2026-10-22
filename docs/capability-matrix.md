@@ -33,13 +33,28 @@
 | `ExplainTool` | `os_explain` | T3 | ✅ |
 | 动态 per-call 连接参数 | `tenant` 参数 + SQLite 配置 | — | ✅ |
 
+## 火山引擎 TLS（`volc-sdk-golang/service/tls`）
+
+| 原生接口 | 统一落点 | 层 | 状态 |
+|---|---|---|---|
+| `DescribeProjects` | `list_sources(tenant)` | T1 | ✅ |
+| `DescribeTopics` | `list_sources(tenant, project)` | T1 | ✅ |
+| `DescribeIndex` | `describe_schema(tenant, project, source)` | T1 | ✅ |
+| `SearchLogsV2`（检索） | `search_logs` + `native_query(language=search)` | T1/T2 | ✅ |
+| `SearchLogsV2`（SQL 分析） | `native_query(language=sql)` | T2 | ✅ |
+| `DescribeHistogramV1.TotalCount` | `count_logs` | T1 | ✅ |
+| `DescribeHistogramV1` | `analyze`（时间直方图） | T1 | ✅ |
+| SQL `AnalysisResult` 分组 | `analyze(group_by)` | T1 | ⚠️ best-effort，依赖 SQL 方言 |
+| `DescribeLogContext` | `get_context` | T1 | ⚠️ v1 时间窗回退，原生锚点延后 |
+| 游标消费 / 消费组 / 分片运维 | 未暴露 | — | ⛔ |
+
 ## 天然不齐、按"不行就分开"处理的能力
 
-| 能力 | SLS | OpenSearch | 处理 |
-|---|---|---|---|
-| 上下文日志 | `get_context` 基于 `pack_id`/`pack_meta` | 无等价语义 | OS 侧返回明确"不支持" |
-| 集群运维 | 无 | `os_*` 工具 | 仅 OS 租户存在时注册 |
-| 查询语言 | SQL / SPL | DSL / PPL | 由 T2 各自透传，互不翻译 |
+| 能力 | SLS | OpenSearch | 火山 TLS | 处理 |
+|---|---|---|---|---|
+| 上下文日志 | `get_context` 基于 `pack_id`/`pack_meta` | 无等价语义 | `DescribeLogContext` 需 `ContextFlow`/`PackageOffset`/`Source` | OS 侧明确"不支持"；TLS v1 时间窗回退 |
+| 集群运维 | 无 | `os_*` 工具 | 无对应 T3 范围 | 仅 OS 租户存在时注册 |
+| 查询语言 | SQL / SPL | DSL / PPL | 检索语句 + SQL（`sql` / `search`） | 由 T2 各自透传，互不翻译 |
 
 ## 有意移出范围
 

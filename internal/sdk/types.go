@@ -13,6 +13,7 @@ type EngineType string
 const (
 	EngineSLS        EngineType = "sls"
 	EngineOpenSearch EngineType = "opensearch"
+	EngineTLS        EngineType = "tls"
 )
 
 // Field describes one field of a data set schema.
@@ -158,6 +159,8 @@ func LanguagesFor(t EngineType) []string {
 		return []string{"sql", "spl"}
 	case EngineOpenSearch:
 		return []string{"dsl", "ppl"}
+	case EngineTLS:
+		return []string{"sql", "search"}
 	default:
 		return nil
 	}

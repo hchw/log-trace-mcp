@@ -13,6 +13,7 @@ import (
 
 	"github.com/hchw/log-trace-mcp/internal/adapter/opensearch"
 	"github.com/hchw/log-trace-mcp/internal/adapter/sls"
+	tlsadapter "github.com/hchw/log-trace-mcp/internal/adapter/tls"
 	"github.com/hchw/log-trace-mcp/internal/crypto"
 	"github.com/hchw/log-trace-mcp/internal/sdk"
 	"github.com/hchw/log-trace-mcp/internal/store"
@@ -139,6 +140,21 @@ func (m *Manager) build(e store.Tenant) (sdk.AdapterInfo, error) {
 			return sdk.AdapterInfo{}, err
 		}
 		return sdk.AdapterInfo{Adapter: a, Engine: sdk.EngineOpenSearch}, nil
+
+	case sdk.EngineTLS:
+		var cfg tlsadapter.Config
+		if err := json.Unmarshal(e.Config, &cfg); err != nil {
+			return sdk.AdapterInfo{}, fmt.Errorf("parse tls config: %w", err)
+		}
+		a, err := tlsadapter.New(cfg, tlsadapter.Creds{
+			AccessKeyID:     creds["ak_id"],
+			AccessKeySecret: creds["ak_secret"],
+			SecurityToken:   creds["security_token"],
+		})
+		if err != nil {
+			return sdk.AdapterInfo{}, err
+		}
+		return sdk.AdapterInfo{Adapter: a, Engine: sdk.EngineTLS}, nil
 
 	default:
 		return sdk.AdapterInfo{}, fmt.Errorf("unknown tenant type %q", e.Type)

@@ -1,16 +1,16 @@
 # log-trace-mcp
 
-> 一个 Go 单二进制，把阿里云 SLS 和 OpenSearch 的日志查询统一成一套 MCP 工具。
+> 一个 Go 单二进制，把阿里云 SLS、OpenSearch 和火山引擎 TLS 的日志查询统一成一套 MCP 工具。
 > 多租户配置落在 SQLite、凭据加密存储、支持热加载，并自带一个 Web 管理页。
 
-面对"日志散在 SLS 和 OpenSearch 两个后端、每个环境一套凭据"的现实，这套工具的目标是：
+面对"日志散在 SLS、OpenSearch、火山引擎 TLS 等多个后端、每个环境一套凭据"的现实，这套工具的目标是：
 给 AI Agent 一个统一入口去查日志，同时**不削减任一后端的原生能力**。
 
 ---
 
 ## 特性一览
 
-- **统一工具面**：一套工具覆盖 SLS 与 OpenSearch，参数与结果结构一致。
+- **统一工具面**：一套工具覆盖 SLS、OpenSearch 与火山 TLS，参数与结果结构一致。
 - **能力不下降**：语义工具（T1）+ 原生透传（T2）+ 引擎独占（T3）三层，任何后端能做的都能做到。
 - **多租户**：`tenant` 代表一套日志中心连接（一套凭据/权限范围），可对应 prod / test 等不同环境。
 - **热加载**：改配置后同进程原子替换 adapter，无需重启。
@@ -59,14 +59,14 @@ pi mcp list
 
 | 工具 | 作用 |
 |---|---|
-| `list_sources` | 列出租户下的数据源：SLS 返回 project（给 `project` 时下钻 logstore），OpenSearch 返回 index |
-| `describe_schema` | 描述数据集字段结构：SLS 索引键、OpenSearch mapping |
+| `list_sources` | 列出租户下的数据源：SLS 返回 project（给 `project` 时下钻 logstore），OpenSearch 返回 index，TLS 返回 project / topic |
+| `describe_schema` | 描述数据集字段结构：SLS 索引键、OpenSearch mapping、TLS 索引配置 |
 | `search_logs` | 关键字 + 字段过滤 + 时间窗 + 排序分页 |
 | `count_logs` | 统计匹配条数 |
 | `compare_logs` | 两个时间窗对照并给出差异 |
 | `analyze` | 时间直方图 + 可选字段分组 top 值 |
-| `get_context` | 某一点前后的上下文日志（SLS） |
-| `native_query` | 原生查询透传：SLS `{sql,spl}`，OpenSearch `{dsl,ppl}` |
+| `get_context` | 某一点前后的上下文日志（SLS 原生锚点；TLS 时间窗回退） |
+| `native_query` | 原生查询透传：SLS `{sql,spl}`，OpenSearch `{dsl,ppl}`，TLS `{sql,search}` |
 | `convert_time` | 时区换算：给定时间 + 原时区 + 目标时区，返回目标时区的时间 |
 
 ### 引擎独占（T3）——仅当存在对应类型租户时注册
@@ -86,14 +86,14 @@ pi mcp list
 
 ```
   tenant   一套日志中心连接 / 一套凭据（例如 prod、test）
-    │      每个 tenant 绑定一个后端类型：sls 或 opensearch
-    └─ project   SLS project（OpenSearch 忽略）
-         └─ source   SLS logstore 或 OpenSearch index
+    │      每个 tenant 绑定一个后端类型：sls、opensearch 或 tls
+    └─ project   SLS / TLS project（OpenSearch 忽略）
+         └─ source   SLS logstore、OpenSearch index 或 TLS topic
 ```
 
 - **`tenant`** 是工具的必填参数，代表权限范围。不同环境用不同 `tenant`。若用户未指明，模型应先询问。
-- **`project`** 是 SLS 的时间/空间命名层，OpenSearch 侧忽略。
-- **`source`** 是具体数据集；也可用 `project/logstore` 两段式传给 `source`（此时 `project` 可省略）。
+- **`project`** 是 SLS 或 TLS 的命名层，OpenSearch 侧忽略。
+- **`source`** 是具体数据集；也可用 `project/logstore` 或 `project/topic` 两段式传给 `source`（此时 `project` 可省略）。
 
 ### 时间参数
 
@@ -161,6 +161,18 @@ OpenSearch：
 ```
 
 `auth_kind` 取值：`basic` | `header`（配 `header_key`/`header_value`）| `none`。
+
+火山引擎 TLS：
+
+```json
+{
+  "id": "prod-tls", "type": "tls", "enabled": true,
+  "config": { "endpoint": "https://tls-cn-beijing.volces.com", "region": "cn-beijing" },
+  "creds": { "ak_id": "AK...", "ak_secret": "..." }
+}
+```
+
+TLS 的 `endpoint` 与 `region` 至少填一个（只填 `region` 时自动拼出 `tls-<region>.volces.com`）；凭据可加 `security_token`。`project` 为日志项目，`source` 为日志主题，均在调用时传入。
 
 ---
 

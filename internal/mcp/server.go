@@ -18,18 +18,18 @@ import (
 const (
 	// instructions are advertised to MCP clients on initialize and frame how the
 	// model should reason about tenants before calling any tool.
-	instructions = `Query logs across Aliyun SLS and OpenSearch through a single unified interface.
+	instructions = `Query logs across Aliyun SLS, OpenSearch, and Volcengine TLS through a single unified interface.
 
 A "tenant" is a configured log-center connection: one credential set with its own permission scope. The same system commonly has separate tenants for different environments (for example "prod" and "test"), which may expose different data and allow different operations. Every tool requires a tenant, and results depend on it. If the user has not named a tenant, ask which one to use before querying - do not guess.
 
-Inside a tenant, a "project" is an SLS project (ignored by OpenSearch) and a "source" is a logstore (SLS) or an index (OpenSearch). Use list_sources to discover a tenant's projects, then list_sources again with project to discover its logstores.
+Inside a tenant, a "project" is an SLS project or a Volcengine TLS log project (ignored by OpenSearch) and a "source" is a logstore (SLS), an index (OpenSearch), or a topic (TLS). Use list_sources to discover a tenant's projects, then list_sources again with project to discover its logstores or topics.
 
 The convert_time tool converts a clock time between time zones (no tenant needed). Use it whenever a time is stated in one zone and the result is needed in another, and ask the user for the source zone when it is ambiguous.`
 
 	tenantDesc    = "Tenant id: a configured log-center connection, i.e. one credential set with its own permission scope. Different tenants usually map to different environments (such as prod or test) and may see different data or allow different operations. Required for every tool. If the user did not specify a tenant, ask which one (prod or test) before querying - do not guess."
-	projectDesc   = "SLS project to query. Optional when source is given as \"project/logstore\". Ignored by OpenSearch. Discover values with list_sources."
-	sourceDesc    = "Logstore (SLS) or index (OpenSearch) to query. Discover values with list_sources."
-	sourceSLSDesc = "Logstore (SLS only). Discover values with list_sources."
+	projectDesc   = "SLS project or Volcengine TLS log project to query. Optional when source is given as \"project/logstore\" or \"project/topic\". Ignored by OpenSearch. Discover values with list_sources."
+	sourceDesc    = "Logstore (SLS), index (OpenSearch), or topic (TLS) to query. Discover values with list_sources."
+	sourceSLSDesc = "Logstore (SLS) or topic (TLS). Discover values with list_sources."
 
 	timeRangeDesc = "Time window as one expression: last_1h, today, now-15m~now-5m, unix seconds, or a datetime such as 2026-10-17 12:26:00. Its start/end are overridden by from/to when those are given."
 	fromDesc      = "Explicit window start. Overrides time_range's start. Accepts unix seconds/milliseconds or a datetime (2026-10-17 12:26:00, 2026-10-17 12:26, 2026-10-17)."
@@ -62,7 +62,7 @@ func (s *Server) MCPServer() *mcpserver.MCPServer { return s.m }
 // Register installs the always-on Tier 1 and Tier 2 tools.
 func (s *Server) Register() {
 	s.m.AddTool(mcp.NewTool("list_sources",
-		mcp.WithDescription("List the data sources (SLS projects / logstores, OpenSearch indices) available to a tenant. Start here to discover what a tenant can access."),
+		mcp.WithDescription("List the data sources (SLS projects / logstores, OpenSearch indices, TLS projects / topics) available to a tenant. Start here to discover what a tenant can access."),
 		mcp.WithString("tenant", mcp.Required(), mcp.Description(tenantDesc)),
 		mcp.WithString("project", mcp.Description(projectDesc)),
 	), s.handleListSources)
@@ -127,7 +127,7 @@ func (s *Server) Register() {
 	), s.handleAnalyze)
 
 	s.m.AddTool(mcp.NewTool("get_context",
-		mcp.WithDescription("Return logs surrounding a point in an SLS logstore. Give an anchor from a search hit (pack_id + pack_meta) for exact native context, or a time to get a window around that instant."),
+		mcp.WithDescription("Return logs surrounding a point in an SLS logstore or TLS topic. Give an anchor from a search hit (pack_id + pack_meta) for exact native context, or a time to get a window around that instant."),
 		mcp.WithString("tenant", mcp.Required(), mcp.Description(tenantDesc)),
 		mcp.WithString("project", mcp.Description(projectDesc)),
 		mcp.WithString("source", mcp.Description(sourceSLSDesc)),
@@ -139,11 +139,11 @@ func (s *Server) Register() {
 	), s.handleGetContext)
 
 	s.m.AddTool(mcp.NewTool("native_query",
-		mcp.WithDescription("Pass a native query through to one tenant's backend. Valid languages: SLS {sql,spl}, OpenSearch {dsl,ppl}."),
+		mcp.WithDescription("Pass a native query through to one tenant's backend. Valid languages depend on the tenant: SLS {sql,spl}, OpenSearch {dsl,ppl}, Volcengine TLS {sql,search}."),
 		mcp.WithString("tenant", mcp.Required(), mcp.Description(tenantDesc)),
 		mcp.WithString("project", mcp.Description(projectDesc)),
 		mcp.WithString("source", mcp.Description(sourceDesc)),
-		mcp.WithString("language", mcp.Required(), mcp.Description("sql | spl | dsl | ppl")),
+		mcp.WithString("language", mcp.Required(), mcp.Description("sql | spl | dsl | ppl | search")),
 		mcp.WithString("query", mcp.Description("Query text for sql/spl/ppl")),
 		mcp.WithObject("body", mcp.Description("Query body object for dsl")),
 		mcp.WithString("time_range", mcp.Description(timeRangeDesc)),

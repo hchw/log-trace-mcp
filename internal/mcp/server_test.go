@@ -125,6 +125,21 @@ func TestEngineToolGating(t *testing.T) {
 	}
 }
 
+func TestTLSDoesNotRegisterClusterTools(t *testing.T) {
+	s := newTestServer(map[string]sdk.EngineType{"tls": sdk.EngineTLS})
+	if hasTool(s, "os_cluster_health") {
+		t.Fatal("os tools should not be registered for a TLS-only tenant set")
+	}
+	res := call(t, s, "native_query", map[string]any{"tenant": "tls", "source": "p/t", "language": "search", "query": "*"})
+	if res.IsError {
+		t.Fatalf("unexpected error for TLS search language: %+v", res)
+	}
+	res = call(t, s, "native_query", map[string]any{"tenant": "tls", "source": "p/t", "language": "spl", "query": "*"})
+	if !res.IsError {
+		t.Fatal("expected error for spl on TLS")
+	}
+}
+
 func hasTool(s *Server, name string) bool {
 	for _, n := range s.RegisteredTools() {
 		if n == name {
