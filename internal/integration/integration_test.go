@@ -10,6 +10,7 @@ import (
 
 	"github.com/hchw/log-trace-mcp/internal/adapter/opensearch"
 	"github.com/hchw/log-trace-mcp/internal/adapter/sls"
+	tlsadapter "github.com/hchw/log-trace-mcp/internal/adapter/tls"
 	"github.com/hchw/log-trace-mcp/internal/sdk"
 )
 
@@ -103,5 +104,59 @@ func TestOpenSearchEndToEnd(t *testing.T) {
 	if _, err := a.NativeQuery(ctx, sdk.NativeReq{Tenant: "it", Source: index,
 		Language: "dsl", Raw: map[string]any{"query": map[string]any{"match_all": map[string]any{}}}}); err != nil {
 		t.Fatalf("native dsl: %v", err)
+	}
+}
+
+func TestTLSEndToEnd(t *testing.T) {
+	endpoint := os.Getenv("LTM_TEST_TLS_ENDPOINT")
+	region := os.Getenv("LTM_TEST_TLS_REGION")
+	ak := os.Getenv("LTM_TEST_TLS_AK_ID")
+	sk := os.Getenv("LTM_TEST_TLS_AK_SECRET")
+	project := os.Getenv("LTM_TEST_TLS_PROJECT")
+	topic := os.Getenv("LTM_TEST_TLS_TOPIC")
+	if (endpoint == "" && region == "") || ak == "" || sk == "" || project == "" || topic == "" {
+		t.Skip("set LTM_TEST_TLS_* to run the TLS integration test")
+	}
+	a, err := tlsadapter.New(tlsadapter.Config{Endpoint: endpoint, Region: region}, tlsadapter.Creds{
+		AccessKeyID:     ak,
+		AccessKeySecret: sk,
+		SecurityToken:   os.Getenv("LTM_TEST_TLS_SECURITY_TOKEN"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	ctx := context.Background()
+
+	sources, err := a.ListSources(ctx, "")
+	if err != nil {
+		t.Fatalf("list projects: %v", err)
+	}
+	if len(sources.Flat) == 0 {
+		t.Fatal("expected at least one project")
+	}
+	if _, err := a.ListSources(ctx, project); err != nil {
+		t.Fatalf("list topics: %v", err)
+	}
+	if _, err := a.DescribeSchema(ctx, project, topic); err != nil {
+		t.Fatalf("describe schema: %v", err)
+	}
+
+	to := time.Now()
+	from := to.Add(-time.Hour)
+	req := sdk.SearchReq{Tenant: "it", Project: project, Source: topic, From: from, To: to, Limit: 5}
+	res, err := a.Search(ctx, req)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if res.Raw == nil {
+		t.Fatal("raw must be preserved")
+	}
+	if _, err := a.Count(ctx, req); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if _, err := a.NativeQuery(ctx, sdk.NativeReq{Tenant: "it", Project: project, Source: topic,
+		Language: "sql", Raw: "* | SELECT count(*) AS c", From: from, To: to, HasTime: true}); err != nil {
+		t.Fatalf("native sql: %v", err)
 	}
 }
